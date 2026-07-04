@@ -73,9 +73,11 @@ Download the binary for your platform from [Releases](../../releases):
 | Platform | Asset |
 |---|---|
 | Linux x86_64 (static) | `statusline-x86_64-linux-musl` |
+| Linux arm64 (static) | `statusline-aarch64-linux-musl` |
 | macOS Apple Silicon | `statusline-aarch64-macos` |
 | macOS Intel | `statusline-x86_64-macos` |
 | Windows x86_64 | `statusline-x86_64-windows.exe` |
+| Windows arm64 | `statusline-aarch64-windows.exe` |
 
 Or build from source (Linux shown; on macOS/Windows a plain
 `cargo build --release` does the job):
