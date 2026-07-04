@@ -1,5 +1,11 @@
 # claude-statusline-rs
 
+[![CI](https://github.com/michaelkrisper/claude-statusline-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/michaelkrisper/claude-statusline-rs/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/michaelkrisper/claude-statusline-rs)](https://github.com/michaelkrisper/claude-statusline-rs/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/michaelkrisper/claude-statusline-rs)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue)](https://github.com/michaelkrisper/claude-statusline-rs/releases/latest)
+[![Made with Rust](https://img.shields.io/badge/rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
+
 A fast, single-binary status line for [Claude Code](https://claude.com/claude-code) that
 shows your context usage, rate-limit consumption — and **predicts when your tokens will
 run out**, based on your live burn rate and your usage history.
@@ -62,8 +68,17 @@ symbol stripping; `.cargo/config.toml` adds `-C target-cpu=native` for local bui
 
 ### 1. Get the binary
 
-Either download `statusline-x86_64-unknown-linux-musl` from
-[Releases](../../releases), or build from source:
+Download the binary for your platform from [Releases](../../releases):
+
+| Platform | Asset |
+|---|---|
+| Linux x86_64 (static) | `statusline-x86_64-linux-musl` |
+| macOS Apple Silicon | `statusline-aarch64-macos` |
+| macOS Intel | `statusline-x86_64-macos` |
+| Windows x86_64 | `statusline-x86_64-windows.exe` |
+
+Or build from source (Linux shown; on macOS/Windows a plain
+`cargo build --release` does the job):
 
 ```sh
 rustup target add x86_64-unknown-linux-musl
@@ -100,7 +115,8 @@ sharper after your first completed 5 h window.
 | `~/.cache/statusline-rs/samples.tsv` | rolling usage samples (12 h) |
 | `~/.cache/statusline-rs/rates.tsv` | per-window burn rates of the last 20 closed 5 h windows |
 
-Delete both to reset all learned history.
+(`$XDG_CACHE_HOME` is honored; on Windows the files live under
+`%USERPROFILE%\.cache\statusline-rs`.) Delete both to reset all learned history.
 
 ## Versioning & releases
 

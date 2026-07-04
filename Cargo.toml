@@ -1,6 +1,6 @@
 [package]
 name = "statusline"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Claude Code status line with rate-limit depletion forecasting"
 license = "MIT"

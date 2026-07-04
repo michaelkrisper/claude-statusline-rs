@@ -7,20 +7,48 @@ on:
 permissions:
   contents: write
 
-env:
-  # portable artifact: overrides the repo-local target-cpu=native
-  RUSTFLAGS: -C target-cpu=x86-64
-
 jobs:
   release:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            asset: statusline-x86_64-linux-musl
+            # portable artifact: overrides the repo-local target-cpu=native
+            rustflags: -C target-cpu=x86-64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: statusline-x86_64-windows.exe
+            bin: statusline.exe
+            rustflags: -C target-cpu=x86-64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset: statusline-aarch64-macos
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset: statusline-x86_64-macos
+            rustflags: -C target-cpu=x86-64
+    runs-on: ${{ matrix.os }}
+    env:
+      # empty for aarch64 (still overrides target-cpu=native to generic)
+      RUSTFLAGS: ${{ matrix.rustflags }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update stable && rustup default stable && rustup target add x86_64-unknown-linux-musl
-      - run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - run: cargo test
-      - run: cargo build --release --target x86_64-unknown-linux-musl
-      - run: cp target/x86_64-unknown-linux-musl/release/statusline statusline-x86_64-unknown-linux-musl
-      - run: gh release create "$GITHUB_REF_NAME" statusline-x86_64-unknown-linux-musl --generate-notes
+      - run: rustup update stable && rustup default stable && rustup target add ${{ matrix.target }}
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      # cross-compiled x86_64-apple-darwin can't run on the arm64 runner
+      - if: matrix.target != 'x86_64-apple-darwin'
+        run: cargo test --target ${{ matrix.target }}
+      - run: cargo build --release --target ${{ matrix.target }}
+      - run: cp "target/${{ matrix.target }}/release/${{ matrix.bin || 'statusline' }}" "${{ matrix.asset }}"
+      - run: gh release create "$GITHUB_REF_NAME" --generate-notes || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: gh release upload "$GITHUB_REF_NAME" "${{ matrix.asset }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
