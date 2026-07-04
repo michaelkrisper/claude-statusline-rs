@@ -1,0 +1,125 @@
+# claude-statusline-rs
+
+A fast, single-binary status line for [Claude Code](https://claude.com/claude-code) that
+shows your context usage, rate-limit consumption — and **predicts when your tokens will
+run out**, based on your live burn rate and your usage history.
+
+```
+~/projects/foo | Fable 5 high | ctx: 42% | 5h: 66% (~20:29 / 23:52) | 7d: 50% (Thu 19:52)
+```
+
+Reading the `5h` segment:
+
+| Display | Meaning |
+|---|---|
+| `5h: 66% (~20:29 / 23:52)` | at the current burn rate you hit 100% at ~20:29, window resets 23:52 |
+| `5h: 22% (+8h / 23:52)` | you have headroom: depletion would land ~8 h *past* the reset |
+| `5h: 22% (23:52)` | no rate estimate yet (fresh install, no history) |
+
+## How the prediction works
+
+The status line is invoked by Claude Code on every refresh. Each invocation appends a
+usage sample (timestamp, 5h/7d percentage, reset timestamps) to a small log — at most
+one sample per 10 s, 12 h retention. From that log it estimates the burn rate as a
+**shrinkage blend** of two estimators:
+
+1. **Live rate** — exponentially weighted least-squares regression over the last 45 min
+   of samples (15 min half-life, so recent activity dominates). Under 5 min of history
+   it falls back to the window average, which is exact early on because a 5 h window
+   starts at 0% with your first message.
+2. **Personal prior** — whenever a 5 h window closes, its observed average rate is
+   harvested into a per-window history (last 20 windows). The prior is the **median**
+   of those rates, so a single burst session can't skew it.
+
+The prior starts with the weight of ~20 min of live evidence and fades linearly to zero
+once a full 45 min of live data exists: right after you start a session you get a
+sensible estimate from your typical behavior; once there is real data, only the live
+regression counts. The projected depletion time is then `now + remaining / rate`.
+
+No prediction is shown when the rate is zero (idle) and no prior exists yet.
+
+## Why Rust?
+
+A status line runs on *every* UI refresh — easily thousands of times per session — so
+per-invocation cost is the whole game:
+
+- **~1 ms per invocation.** Measured against `/bin/true`, the binary is at the kernel's
+  process-spawn floor: parsing the JSON payload, reading the sample log, and the
+  regression itself are no longer measurable. An interpreter would pay 30–100 ms
+  *before executing its first line* (Python/Node startup), i.e. 30–100× the entire
+  budget, on every refresh.
+- **~400 KB peak RSS.** Statically linked against musl there is no interpreter heap, no
+  GC, no runtime — compared to ~2.1 MB glibc-dynamic and tens of MB for a scripting
+  runtime.
+- **~500 KB binary, zero dependencies at runtime.** One file, no venv, no node_modules,
+  nothing to keep in sync.
+
+Release builds use `opt-level=3`, fat LTO, a single codegen unit, `panic=abort` and
+symbol stripping; `.cargo/config.toml` adds `-C target-cpu=native` for local builds
+(CI release artifacts are built portable with `target-cpu=x86-64`).
+
+## Install (Claude Code)
+
+### 1. Get the binary
+
+Either download `statusline-x86_64-unknown-linux-musl` from
+[Releases](../../releases), or build from source:
+
+```sh
+rustup target add x86_64-unknown-linux-musl
+cargo build --release --target x86_64-unknown-linux-musl
+```
+
+### 2. Put it somewhere stable
+
+```sh
+mkdir -p ~/.claude/statusline
+cp target/x86_64-unknown-linux-musl/release/statusline ~/.claude/statusline/
+```
+
+### 3. Point Claude Code at it
+
+In `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/home/YOU/.claude/statusline/statusline"
+  }
+}
+```
+
+That's it — the prediction appears automatically once enough samples exist, and gets
+sharper after your first completed 5 h window.
+
+## State files
+
+| File | Content |
+|---|---|
+| `~/.cache/statusline-rs/samples.tsv` | rolling usage samples (12 h) |
+| `~/.cache/statusline-rs/rates.tsv` | per-window burn rates of the last 20 closed 5 h windows |
+
+Delete both to reset all learned history.
+
+## Versioning & releases
+
+[SemVer](https://semver.org/): breaking output-format changes bump minor (pre-1.0) /
+major, everything else patch. A release is cut by bumping `version` in `Cargo.toml`
+and pushing a matching tag — CI builds the portable binary and attaches it:
+
+```sh
+git tag v0.1.1 && git push origin v0.1.1
+```
+
+## Development
+
+```sh
+cargo test          # unit tests for regression, blending, harvesting, formatting
+cargo clippy --all-targets -- -D warnings
+cargo fmt --check
+```
+
+## License
+
+MIT
