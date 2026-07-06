@@ -1,9 +1,9 @@
-# claude-statusline-rs
+# claude-statusline
 
-[![CI](https://github.com/michaelkrisper/claude-statusline-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/michaelkrisper/claude-statusline-rs/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/michaelkrisper/claude-statusline-rs)](https://github.com/michaelkrisper/claude-statusline-rs/releases/latest)
-[![License: MIT](https://img.shields.io/github/license/michaelkrisper/claude-statusline-rs)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue)](https://github.com/michaelkrisper/claude-statusline-rs/releases/latest)
+[![CI](https://github.com/michaelkrisper/claude-statusline/actions/workflows/ci.yml/badge.svg)](https://github.com/michaelkrisper/claude-statusline/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/michaelkrisper/claude-statusline)](https://github.com/michaelkrisper/claude-statusline/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/michaelkrisper/claude-statusline)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue)](https://github.com/michaelkrisper/claude-statusline/releases/latest)
 [![Made with Rust](https://img.shields.io/badge/rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
 
 A fast, single-binary status line for [Claude Code](https://claude.com/claude-code) that
