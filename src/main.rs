@@ -300,8 +300,11 @@ fn main() {
     }
 
     if let Some((p, r)) = five {
-        out.push_str(&format!(" | 5h: {}%", p.round() as i64));
-        push_times(&mut out, e5, r, "%H:%M");
+        // the 5h window (usage + depletion forecast) is the headline metric, so
+        // emphasize it in bold (\x1b[1m); the rest of the line stays default weight
+        let mut seg = format!("5h: {}%", p.round() as i64);
+        push_times(&mut seg, e5, r, "%H:%M");
+        out.push_str(&format!(" | \x1b[1m{seg}\x1b[0m"));
     }
     if let Some((p, r)) = seven {
         out.push_str(&format!(" | 7d: {}%", p.round() as i64));
@@ -376,11 +379,13 @@ mod tests {
     fn eta_none_when_idle_without_prior() {
         let reset = NOW + 4 * 3600;
         let samples = linear_samples(NOW, reset, 40, 66.2, 0.0);
-        assert!(eta(&samples, NOW, 66.2, reset, 5 * 3600, None, |s| (
-            s.five,
-            s.five_reset
-        ))
-        .is_none());
+        assert!(
+            eta(&samples, NOW, 66.2, reset, 5 * 3600, None, |s| (
+                s.five,
+                s.five_reset
+            ))
+            .is_none()
+        );
     }
 
     #[test]
@@ -415,11 +420,13 @@ mod tests {
         // 45 min of flat live data: prior weight is 0, idle -> no projection
         let reset = NOW + 4 * 3600;
         let samples = linear_samples(NOW, reset, 45, 66.2, 0.0);
-        assert!(eta(&samples, NOW, 66.2, reset, 5 * 3600, Some(0.02), |s| (
-            s.five,
-            s.five_reset
-        ))
-        .is_none());
+        assert!(
+            eta(&samples, NOW, 66.2, reset, 5 * 3600, Some(0.02), |s| (
+                s.five,
+                s.five_reset
+            ))
+            .is_none()
+        );
     }
 
     #[test]
