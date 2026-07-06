@@ -12,6 +12,9 @@ const W_PRIOR: f64 = 1200.0; // prior counts like 20 min of live evidence
 const HARVEST_MIN_SPAN: i64 = 900; // closed window must span this to yield a rate
 const HARVEST_MIN_PCT: f64 = 2.0;
 const RATES_KEEP: usize = 20;
+const URGENT_SECS: i64 = 15 * 60; // a 5h depletion ETA closer than this is flagged
+const URGENT: &str = "\x1b[91m"; // bright-red signal color on the ETA clock time
+const FG_RESET: &str = "\x1b[39m"; // reset foreground only, preserving surrounding bold
 
 fn pct(v: &Value, path: &[&str]) -> Option<i64> {
     path.iter()
@@ -37,8 +40,9 @@ fn fmt_ts(ts: i64, fmt: &str) -> Option<String> {
 }
 
 // " (~ETA / RESET)" if depletion lands before the reset, " (+Nh / RESET)" with the
-// overshoot past the reset otherwise, " (RESET)" if no rate is known
-fn push_times(out: &mut String, eta: Option<i64>, reset: i64, reset_fmt: &str) {
+// overshoot past the reset otherwise, " (RESET)" if no rate is known. When the ETA is
+// less than URGENT_SECS away, the clock time is painted in the urgent signal color.
+fn push_times(out: &mut String, eta: Option<i64>, reset: i64, now: i64, reset_fmt: &str) {
     let eta_s = eta.and_then(|t| {
         if t >= reset {
             return Some(format!("+{}h", ((t - reset + 3599) / 3600).min(9999)));
@@ -46,8 +50,14 @@ fn push_times(out: &mut String, eta: Option<i64>, reset: i64, reset_fmt: &str) {
         let same_day = Local
             .timestamp_opt(t, 0)
             .single()
-            .is_some_and(|dt| dt.date_naive() == Local::now().date_naive());
-        fmt_ts(t, if same_day { "%H:%M" } else { "%a %H:%M" }).map(|s| format!("~{s}"))
+            .zip(Local.timestamp_opt(now, 0).single())
+            .is_some_and(|(a, b)| a.date_naive() == b.date_naive());
+        let hm = fmt_ts(t, if same_day { "%H:%M" } else { "%a %H:%M" })?;
+        Some(if t - now < URGENT_SECS {
+            format!("~{URGENT}{hm}{FG_RESET}")
+        } else {
+            format!("~{hm}")
+        })
     });
     match (eta_s, fmt_ts(reset, reset_fmt)) {
         (Some(e), Some(r)) => out.push_str(&format!(" ({e} / {r})")),
@@ -303,12 +313,12 @@ fn main() {
         // the 5h window (usage + depletion forecast) is the headline metric, so
         // emphasize it in bold (\x1b[1m); the rest of the line stays default weight
         let mut seg = format!("5h: {}%", p.round() as i64);
-        push_times(&mut seg, e5, r, "%H:%M");
+        push_times(&mut seg, e5, r, now, "%H:%M");
         out.push_str(&format!(" | \x1b[1m{seg}\x1b[0m"));
     }
     if let Some((p, r)) = seven {
         out.push_str(&format!(" | 7d: {}%", p.round() as i64));
-        push_times(&mut out, None, r, "%a %H:%M");
+        push_times(&mut out, None, r, now, "%a %H:%M");
     }
 
     if let Some(email) = account_email() {
@@ -494,22 +504,37 @@ mod tests {
     fn push_times_overshoot_in_hours() {
         let mut out = String::new();
         let reset = NOW;
-        push_times(&mut out, Some(reset + 7 * 3600 + 1800), reset, "%H:%M");
+        push_times(&mut out, Some(reset + 7 * 3600 + 1800), reset, NOW, "%H:%M");
         assert!(out.contains("(+8h / "), "got {out:?}"); // ceil(7.5h)
     }
 
     #[test]
     fn push_times_clock_time_before_reset() {
         let mut out = String::new();
-        push_times(&mut out, Some(NOW + 600), NOW + 3600, "%H:%M");
+        // 30 min out (>= URGENT_SECS) -> plain clock time, no signal color
+        push_times(&mut out, Some(NOW + 1800), NOW + 3600, NOW, "%H:%M");
         assert!(out.contains("(~"), "got {out:?}");
         assert!(out.contains(" / "), "got {out:?}");
+        assert!(!out.contains(URGENT), "got {out:?}");
+    }
+
+    #[test]
+    fn push_times_urgent_eta_is_colored() {
+        let mut out = String::new();
+        // 10 min out (< URGENT_SECS) -> ETA clock time wrapped in the signal color
+        push_times(&mut out, Some(NOW + 600), NOW + 3600, NOW, "%H:%M");
+        assert!(
+            out.contains(URGENT) && out.contains(FG_RESET),
+            "got {out:?}"
+        );
+        // color must not leak past the ETA into the reset time
+        assert!(out.contains(&format!("{FG_RESET} / ")), "got {out:?}");
     }
 
     #[test]
     fn push_times_reset_only_without_eta() {
         let mut out = String::new();
-        push_times(&mut out, None, NOW, "%H:%M");
+        push_times(&mut out, None, NOW, NOW, "%H:%M");
         assert!(!out.contains('~') && !out.contains('+'), "got {out:?}");
         assert!(out.starts_with(" (") && out.ends_with(')'), "got {out:?}");
     }
