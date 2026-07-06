@@ -7,11 +7,11 @@
 [![Made with Rust](https://img.shields.io/badge/rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
 
 A fast, single-binary status line for [Claude Code](https://claude.com/claude-code) that
-shows your context usage, rate-limit consumption — and **predicts when your tokens will
-run out**, based on your live burn rate and your usage history.
+shows your context usage, rate-limit consumption, the active account — and **predicts
+when your tokens will run out**, based on your live burn rate and your usage history.
 
 ```
-~/projects/foo | Fable 5 high | ctx: 42% | 5h: 66% (~20:29 / 23:52) | 7d: 50% (Thu 19:52)
+~/projects/foo | Fable 5 high | ctx: 42% | 5h: 66% (~20:29 / 23:52) | 7d: 50% (Thu 19:52) | you@example.com
 ```
 
 Reading the `5h` segment:
@@ -21,6 +21,10 @@ Reading the `5h` segment:
 | `5h: 66% (~20:29 / 23:52)` | at the current burn rate you hit 100% at ~20:29, window resets 23:52 |
 | `5h: 22% (+8h / 23:52)` | you have headroom: depletion would land ~8 h *past* the reset |
 | `5h: 22% (23:52)` | no rate estimate yet (fresh install, no history) |
+
+The trailing segment is the **active Claude account**, read live from `~/.claude.json`
+on every invocation so it reflects the current login immediately after an account
+switch. It is omitted when that file is absent or holds no signed-in account.
 
 ## How the prediction works
 

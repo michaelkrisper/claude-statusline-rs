@@ -66,6 +66,23 @@ struct Sample {
     seven_reset: i64,
 }
 
+// active Claude account, read live from ~/.claude.json on every invocation so it
+// reflects the current login immediately after a switch, with no caching. A
+// single-pass substring scan rather than a full parse of the ~30 KB file: locate
+// the oauthAccount object, then the first emailAddress string inside it.
+fn parse_email(data: &str) -> Option<&str> {
+    let rest = &data[data.find("\"oauthAccount\"")?..];
+    let after = rest[rest.find("\"emailAddress\"")? + 14..].trim_start();
+    let after = after.strip_prefix(':')?.trim_start().strip_prefix('"')?;
+    Some(&after[..after.find('"')?])
+}
+
+fn account_email() -> Option<String> {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    let data = std::fs::read_to_string(PathBuf::from(home).join(".claude.json")).ok()?;
+    parse_email(&data).map(str::to_string)
+}
+
 fn state_dir() -> Option<PathBuf> {
     let dir = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
@@ -291,6 +308,10 @@ fn main() {
         push_times(&mut out, None, r, "%a %H:%M");
     }
 
+    if let Some(email) = account_email() {
+        out.push_str(&format!(" | {email}"));
+    }
+
     println!("{out}");
 }
 
@@ -484,6 +505,18 @@ mod tests {
         push_times(&mut out, None, NOW, "%H:%M");
         assert!(!out.contains('~') && !out.contains('+'), "got {out:?}");
         assert!(out.starts_with(" (") && out.ends_with(')'), "got {out:?}");
+    }
+
+    #[test]
+    fn parse_email_extracts_oauth_account() {
+        let j =
+            r#"{"a":"b","oauthAccount":{"accountUuid":"u","emailAddress":"me@example.com"},"c":1}"#;
+        assert_eq!(parse_email(j), Some("me@example.com"));
+        // an emailAddress before oauthAccount must not be picked up
+        let j2 = r#"{"emailAddress":"decoy@x.io","oauthAccount":{"emailAddress":"real@x.io"}}"#;
+        assert_eq!(parse_email(j2), Some("real@x.io"));
+        assert_eq!(parse_email("{}"), None);
+        assert_eq!(parse_email(r#"{"oauthAccount":{}}"#), None);
     }
 
     #[test]
