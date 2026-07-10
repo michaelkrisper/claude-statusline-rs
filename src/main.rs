@@ -249,21 +249,30 @@ fn eta(
     Some(now + (((100.0 - cur) / rate).min(1e9) as i64))
 }
 
+// separator prefix: empty for the first field, " | " once the line has content
+fn sep(out: &str) -> &'static str {
+    if out.is_empty() { "" } else { " | " }
+}
+
 fn main() {
     let mut buf = String::new();
     std::io::stdin().read_to_string(&mut buf).ok();
     let v: Value = serde_json::from_str(&buf).unwrap_or(Value::Null);
 
-    let mut out = str_at(&v, &["cwd"]).unwrap_or("").to_string();
+    let mut out = String::new();
+
+    if let Some(email) = account_email() {
+        out.push_str(&format!("{}{email}", sep(&out)));
+    }
 
     let model = str_at(&v, &["model", "display_name"]).unwrap_or("");
-    out.push_str(&format!(" | {model}"));
+    out.push_str(&format!("{}{model}", sep(&out)));
     if let Some(e) = str_at(&v, &["effort", "level"]) {
         out.push_str(&format!(" {e}"));
     }
 
     if let Some(p) = pct(&v, &["context_window", "used_percentage"]) {
-        out.push_str(&format!(" | ctx: {p}%"));
+        out.push_str(&format!("{}ctx: {p}%", sep(&out)));
     }
 
     // projected depletion: sample usage over time, extrapolate burn rate to 100%
@@ -314,15 +323,16 @@ fn main() {
         // emphasize it in bold (\x1b[1m); the rest of the line stays default weight
         let mut seg = format!("5h: {}%", p.round() as i64);
         push_times(&mut seg, e5, r, now, "%H:%M");
-        out.push_str(&format!(" | \x1b[1m{seg}\x1b[0m"));
+        out.push_str(&format!("{}\x1b[1m{seg}\x1b[0m", sep(&out)));
     }
     if let Some((p, r)) = seven {
-        out.push_str(&format!(" | 7d: {}%", p.round() as i64));
+        out.push_str(&format!("{}7d: {}%", sep(&out), p.round() as i64));
         push_times(&mut out, None, r, now, "%a %H:%M");
     }
 
-    if let Some(email) = account_email() {
-        out.push_str(&format!(" | {email}"));
+    // path (dynamic length) last, so the fixed-width fields stay column-aligned
+    if let Some(cwd) = str_at(&v, &["cwd"]).filter(|s| !s.is_empty()) {
+        out.push_str(&format!("{}{cwd}", sep(&out)));
     }
 
     println!("{out}");
