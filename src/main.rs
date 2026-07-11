@@ -261,6 +261,8 @@ fn main() {
 
     let mut out = String::new();
 
+    out.push_str(&Local::now().format("%H:%M").to_string());
+
     if let Some(email) = account_email() {
         out.push_str(&format!("{}{email}", sep(&out)));
     }
