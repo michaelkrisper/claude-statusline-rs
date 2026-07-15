@@ -162,6 +162,67 @@ fn disk_free(_path: &str) -> Option<u64> {
     None
 }
 
+// columns of the terminal the status line is rendered in. stdout is a pipe, so
+// ask the controlling terminal directly; COLUMNS as a fallback.
+#[cfg(unix)]
+fn term_width() -> Option<usize> {
+    let tty = std::ffi::CString::new("/dev/tty").ok()?;
+    let fd = unsafe { libc::open(tty.as_ptr(), libc::O_RDONLY) };
+    if fd >= 0 {
+        let mut ws: libc::winsize = unsafe { std::mem::zeroed() };
+        let r = unsafe { libc::ioctl(fd, libc::TIOCGWINSZ, &mut ws) };
+        unsafe { libc::close(fd) };
+        if r == 0 && ws.ws_col > 0 {
+            return Some(ws.ws_col as usize);
+        }
+    }
+    std::env::var("COLUMNS").ok()?.parse().ok()
+}
+
+#[cfg(not(unix))]
+fn term_width() -> Option<usize> {
+    std::env::var("COLUMNS").ok()?.parse().ok()
+}
+
+// terminal cell width of one char: emoji and East Asian wide glyphs take two
+// columns, variation selectors and ZWJ none
+fn char_width(c: char) -> usize {
+    match c as u32 {
+        0xFE0E..=0xFE0F | 0x200D => 0,
+        0x1100..=0x115F
+        | 0x231A..=0x231B
+        | 0x23E9..=0x23FA
+        | 0x2E80..=0x303E
+        | 0x3041..=0x33FF
+        | 0xA000..=0xA4CF
+        | 0xAC00..=0xD7A3
+        | 0xF900..=0xFAFF
+        | 0xFE30..=0xFE4F
+        | 0xFF00..=0xFF60
+        | 0xFFE0..=0xFFE6
+        | 0x1F000..=0x1FAFF => 2,
+        _ => 1,
+    }
+}
+
+// visible width of the line: ANSI escape sequences occupy no columns
+fn disp_width(s: &str) -> usize {
+    let mut w = 0;
+    let mut it = s.chars();
+    while let Some(c) = it.next() {
+        if c == '\x1b' {
+            for n in it.by_ref() {
+                if n.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            w += char_width(c);
+        }
+    }
+    w
+}
+
 fn fmt_bytes(b: u64) -> String {
     let g = b as f64 / (1u64 << 30) as f64;
     if g >= 1024.0 {
@@ -334,10 +395,12 @@ fn main() {
 
     let mut out = String::new();
 
-    out.push_str(&Local::now().format("🕐 %H:%M").to_string());
-
     let state = state_dir();
     let cwd = str_at(&v, &["cwd"]).filter(|s| !s.is_empty());
+
+    if let Some(cwd) = cwd {
+        out.push_str(&format!("📁 {cwd}"));
+    }
 
     if let Some(p) = state.as_deref().and_then(cpu_pct) {
         out.push_str(&format!("{}🧠 {p}%", sep(&out)));
@@ -416,10 +479,13 @@ fn main() {
         out.push_str(&format!("{}\x1b[1m{seg}\x1b[0m", sep(&out)));
     }
 
-    // path (dynamic length) last, so the fixed-width fields stay column-aligned
-    if let Some(cwd) = cwd {
-        out.push_str(&format!("{}📁 {cwd}", sep(&out)));
-    }
+    // clock last, pushed to the right edge when the terminal width is known
+    let clock = Local::now().format("🕐 %H:%M").to_string();
+    let pad = term_width()
+        .map(|w| w.saturating_sub(disp_width(&out) + disp_width(&clock)))
+        .filter(|&p| p > 0)
+        .unwrap_or(1);
+    out.push_str(&format!("{}{clock}", " ".repeat(pad)));
 
     println!("{out}");
 }
@@ -660,6 +726,16 @@ mod tests {
         assert_eq!(fmt_bytes(5 << 30), "5.0G");
         assert_eq!(fmt_bytes(897 << 30), "897G");
         assert_eq!(fmt_bytes(1536 << 30), "1.5T");
+    }
+
+    #[test]
+    fn disp_width_counts_cells_not_bytes() {
+        assert_eq!(disp_width("abc"), 3);
+        assert_eq!(disp_width("🧠 3%"), 5); // emoji = 2 cells
+        assert_eq!(disp_width("⏳ 41%"), 6); // U+23F3 renders wide
+        assert_eq!(disp_width("\x1b[1m⏳ 41%\x1b[0m"), 6); // ANSI = 0 cells
+        assert_eq!(disp_width("🕐 09:48"), 8);
+        assert_eq!(disp_width("⚙\u{fe0f}"), 1); // variation selector = 0 cells
     }
 
     #[test]

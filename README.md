@@ -12,21 +12,23 @@ rate-limit consumption — and **predicts when your tokens will run out**, based
 live burn rate and your usage history.
 
 ```
-🕐 09:48 🧠 4% 📟 21% 💾 21G 👤 you Fable 5 high ⏳ 66% (~20:29 / 23:52) 📁 ~/projects/foo
+📁 ~/projects/foo 🧠 4% 📟 21% 💾 21G 👤 you Fable 5 high ⏳ 66% (~20:29 / 23:52)      🕐 09:48
 ```
 
-Fields are separated by single spaces; the symbols carry the visual separation.
+Fields are separated by single spaces; the symbols carry the visual separation. The
+clock is pushed to the right edge of the terminal (`TIOCGWINSZ` on `/dev/tty`, with
+`$COLUMNS` as fallback; a single space when neither is available).
 
 | Field | Source |
 |---|---|
-| `🕐 09:48` | current local time |
+| `📁 ~/projects/foo` | project directory |
 | `🧠 4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
 | `📟 21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
 | `💾 21G` | free space on the filesystem holding the project directory (`statvfs`) |
 | `👤 you` | active Claude account — the part before the `@` of the signed-in email |
 | `Fable 5 high` | model and effort level |
 | `⏳ 66% (…)` | 5 h rate-limit usage with depletion forecast (see below) |
-| `📁 ~/projects/foo` | project directory |
+| `🕐 09:48` | current local time, right-aligned |
 
 The host metrics (`cpu`, `ram`) come from `/proc` and are shown on Linux; `disk` on any
 Unix. Fields whose source is unavailable are simply omitted.
