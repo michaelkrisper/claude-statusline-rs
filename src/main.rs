@@ -12,6 +12,7 @@ const W_PRIOR: f64 = 1200.0; // prior counts like 20 min of live evidence
 const HARVEST_MIN_SPAN: i64 = 900; // closed window must span this to yield a rate
 const HARVEST_MIN_PCT: f64 = 2.0;
 const RATES_KEEP: usize = 20;
+const GPU_REFRESH: i64 = 10; // nvidia-smi is re-queried at most this often
 const URGENT_SECS: i64 = 15 * 60; // a 5h depletion ETA closer than this is flagged
 const URGENT: &str = "\x1b[91m"; // bright-red signal color on the ETA clock time
 const FG_RESET: &str = "\x1b[39m"; // reset foreground only, preserving surrounding bold
@@ -160,6 +161,61 @@ fn disk_free(path: &str) -> Option<u64> {
 #[cfg(not(unix))]
 fn disk_free(_path: &str) -> Option<u64> {
     None
+}
+
+// first GPU of an nvidia-smi csv line "util, mem.used, mem.total" (MiB) into
+// (gpu %, vram %)
+fn parse_gpu_csv(data: &str) -> Option<(i64, i64)> {
+    let mut f = data.lines().next()?.split(',').map(str::trim);
+    let util: i64 = f.next()?.parse().ok()?;
+    let used: f64 = f.next()?.parse().ok()?;
+    let total: f64 = f.next()?.parse().ok()?;
+    (total > 0.0).then(|| (util, (100.0 * used / total).round() as i64))
+}
+
+fn mtime_secs(m: &std::fs::Metadata) -> Option<i64> {
+    let d = m
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    Some(d.as_secs() as i64)
+}
+
+// cached (gpu %, vram %). nvidia-smi is slow (hundreds of ms on WSL2), so it is
+// never awaited: at most every GPU_REFRESH seconds a detached child re-queries it
+// into gpu.csv.tmp; a later invocation adopts the finished file atomically. The
+// empty tmp file doubles as the in-flight marker against spawn stampedes.
+fn gpu_stats(dir: &std::path::Path, now: i64) -> Option<(i64, i64)> {
+    let path = dir.join("gpu.csv");
+    let tmp = dir.join("gpu.csv.tmp");
+    let age = |p: &std::path::Path| {
+        std::fs::metadata(p)
+            .ok()
+            .as_ref()
+            .and_then(mtime_secs)
+            .map(|t| now - t)
+    };
+    if std::fs::metadata(&tmp).is_ok_and(|m| m.len() > 0) {
+        std::fs::rename(&tmp, &path).ok();
+    }
+    let fresh = |a: Option<i64>| a.is_some_and(|a| a < GPU_REFRESH);
+    if !fresh(age(&path))
+        && !fresh(age(&tmp))
+        && let Ok(f) = std::fs::File::create(&tmp)
+    {
+        std::process::Command::new("nvidia-smi")
+            .args([
+                "--query-gpu=utilization.gpu,memory.used,memory.total",
+                "--format=csv,noheader,nounits",
+            ])
+            .stdin(std::process::Stdio::null())
+            .stdout(f)
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok();
+    }
+    parse_gpu_csv(&std::fs::read_to_string(&path).ok()?)
 }
 
 // columns of the terminal the status line is rendered in. stdout is a pipe, so
@@ -395,6 +451,7 @@ fn main() {
 
     let mut out = String::new();
 
+    let now = Local::now().timestamp();
     let state = state_dir();
     let cwd = str_at(&v, &["cwd"]).filter(|s| !s.is_empty());
 
@@ -411,6 +468,9 @@ fn main() {
         .and_then(meminfo_pct)
     {
         out.push_str(&format!("{}📟 {p}%", sep(&out)));
+    }
+    if let Some((gpu, vram)) = state.as_deref().and_then(|d| gpu_stats(d, now)) {
+        out.push_str(&format!("{}🎮 {gpu}% 🖼 {vram}%", sep(&out)));
     }
     if let Some(free) = disk_free(cwd.unwrap_or("/")) {
         out.push_str(&format!("{}💾 {}", sep(&out), fmt_bytes(free)));
@@ -429,7 +489,6 @@ fn main() {
     }
 
     // projected depletion: sample usage over time, extrapolate burn rate to 100%
-    let now = Local::now().timestamp();
     let five = fval(&v, &["rate_limits", "five_hour", "used_percentage"])
         .zip(ival(&v, &["rate_limits", "five_hour", "resets_at"]));
     let seven = fval(&v, &["rate_limits", "seven_day", "used_percentage"])
@@ -726,6 +785,19 @@ mod tests {
         assert_eq!(fmt_bytes(5 << 30), "5.0G");
         assert_eq!(fmt_bytes(897 << 30), "897G");
         assert_eq!(fmt_bytes(1536 << 30), "1.5T");
+    }
+
+    #[test]
+    fn parse_gpu_csv_first_gpu() {
+        assert_eq!(parse_gpu_csv("7, 2126, 16303\n"), Some((7, 13)));
+        // multi-GPU: first line wins
+        assert_eq!(
+            parse_gpu_csv("50, 8000, 16000\n10, 1, 16000\n"),
+            Some((50, 50))
+        );
+        assert_eq!(parse_gpu_csv(""), None);
+        assert_eq!(parse_gpu_csv("[N/A], 0, 0\n"), None);
+        assert_eq!(parse_gpu_csv("7, 2126, 0\n"), None);
     }
 
     #[test]

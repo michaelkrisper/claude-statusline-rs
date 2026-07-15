@@ -12,7 +12,7 @@ rate-limit consumption — and **predicts when your tokens will run out**, based
 live burn rate and your usage history.
 
 ```
-📁 ~/projects/foo 🧠 4% 📟 21% 💾 21G 👤 you Fable 5 high ⏳ 66% (~20:29 / 23:52)      🕐 09:48
+📁 ~/projects/foo 🧠 4% 📟 21% 🎮 7% 🖼 13% 💾 21G 👤 you Fable 5 high ⏳ 66% (~20:29 / 23:52)      🕐 09:48
 ```
 
 Fields are separated by single spaces; the symbols carry the visual separation. The
@@ -24,6 +24,8 @@ clock is pushed to the right edge of the terminal (`TIOCGWINSZ` on `/dev/tty`, w
 | `📁 ~/projects/foo` | project directory |
 | `🧠 4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
 | `📟 21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
+| `🎮 7%` | GPU utilization (first GPU, via `nvidia-smi`, cached — see below) |
+| `🖼 13%` | used VRAM (memory.used vs memory.total) |
 | `💾 21G` | free space on the filesystem holding the project directory (`statvfs`) |
 | `👤 you` | active Claude account — the part before the `@` of the signed-in email |
 | `Fable 5 high` | model and effort level |
@@ -32,6 +34,12 @@ clock is pushed to the right edge of the terminal (`TIOCGWINSZ` on `/dev/tty`, w
 
 The host metrics (`cpu`, `ram`) come from `/proc` and are shown on Linux; `disk` on any
 Unix. Fields whose source is unavailable are simply omitted.
+
+`nvidia-smi` takes hundreds of milliseconds (notably on WSL2), so the GPU fields are
+never queried inline: at most every 10 s a **detached** background child refreshes
+`gpu.csv` in the state dir, and invocations only ever read the cached value — no
+status-line refresh ever blocks on the GPU. Without `nvidia-smi` the fields stay
+hidden.
 
 Reading the `⏳` (5 h session) segment:
 
@@ -140,6 +148,7 @@ sharper after your first completed 5 h window.
 | `~/.cache/statusline-rs/samples.tsv` | rolling usage samples (12 h) |
 | `~/.cache/statusline-rs/rates.tsv` | per-window burn rates of the last 20 closed 5 h windows |
 | `~/.cache/statusline-rs/cpu.tsv` | `/proc/stat` jiffies baseline for the CPU-usage delta |
+| `~/.cache/statusline-rs/gpu.csv` | cached `nvidia-smi` sample, refreshed in the background every 10 s |
 
 (`$XDG_CACHE_HOME` is honored; on Windows the files live under
 `%USERPROFILE%\.cache\statusline-rs`.) Delete both to reset all learned history.
