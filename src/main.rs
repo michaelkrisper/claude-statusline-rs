@@ -16,13 +16,6 @@ const URGENT_SECS: i64 = 15 * 60; // a 5h depletion ETA closer than this is flag
 const URGENT: &str = "\x1b[91m"; // bright-red signal color on the ETA clock time
 const FG_RESET: &str = "\x1b[39m"; // reset foreground only, preserving surrounding bold
 
-fn pct(v: &Value, path: &[&str]) -> Option<i64> {
-    path.iter()
-        .try_fold(v, |acc, k| acc.get(k))?
-        .as_f64()
-        .map(|f| f.round() as i64)
-}
-
 fn fval(v: &Value, path: &[&str]) -> Option<f64> {
     path.iter().try_fold(v, |acc, k| acc.get(k))?.as_f64()
 }
@@ -101,6 +94,85 @@ fn state_dir() -> Option<PathBuf> {
         .join("statusline-rs");
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
+}
+
+// cumulative (total, idle) jiffies since boot from /proc/stat's aggregate cpu line
+fn parse_cpu_totals(stat: &str) -> Option<(u64, u64)> {
+    let mut it = stat.lines().next()?.split_whitespace();
+    if it.next()? != "cpu" {
+        return None;
+    }
+    let vals: Vec<u64> = it.map_while(|t| t.parse().ok()).collect();
+    if vals.len() < 4 {
+        return None;
+    }
+    // idle + iowait both count as not-working
+    Some((
+        vals.iter().sum(),
+        vals[3] + vals.get(4).copied().unwrap_or(0),
+    ))
+}
+
+// CPU usage over the interval since the previous invocation, via (total, idle)
+// jiffies persisted in the state dir. None on the very first run (no baseline yet)
+// and on platforms without /proc.
+fn cpu_pct(dir: &std::path::Path) -> Option<i64> {
+    let (total, idle) = parse_cpu_totals(&std::fs::read_to_string("/proc/stat").ok()?)?;
+    let path = dir.join("cpu.tsv");
+    let prev = std::fs::read_to_string(&path).ok().and_then(|s| {
+        let mut it = s.split_whitespace();
+        Some((
+            it.next()?.parse::<u64>().ok()?,
+            it.next()?.parse::<u64>().ok()?,
+        ))
+    });
+    std::fs::write(&path, format!("{total} {idle}\n")).ok();
+    let (pt, pi) = prev?;
+    let dt = total.checked_sub(pt)?;
+    let di = idle.saturating_sub(pi).min(dt);
+    (dt > 0).then(|| (100.0 * (1.0 - di as f64 / dt as f64)).round() as i64)
+}
+
+// used-RAM percentage from /proc/meminfo (MemAvailable vs MemTotal)
+fn meminfo_pct(data: &str) -> Option<i64> {
+    let kb = |key: &str| -> Option<f64> {
+        data.lines()
+            .find(|l| l.starts_with(key))?
+            .split_whitespace()
+            .nth(1)?
+            .parse()
+            .ok()
+    };
+    let total = kb("MemTotal:")?;
+    let avail = kb("MemAvailable:")?;
+    (total > 0.0).then(|| (100.0 * (1.0 - avail / total)).round() as i64)
+}
+
+// free bytes available to unprivileged users on the filesystem holding `path`
+#[cfg(unix)]
+fn disk_free(path: &str) -> Option<u64> {
+    let c = std::ffi::CString::new(path).ok()?;
+    let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+    (unsafe { libc::statvfs(c.as_ptr(), &mut st) } == 0)
+        .then(|| st.f_bavail as u64 * st.f_frsize as u64)
+}
+
+#[cfg(not(unix))]
+fn disk_free(_path: &str) -> Option<u64> {
+    None
+}
+
+fn fmt_bytes(b: u64) -> String {
+    let g = b as f64 / (1u64 << 30) as f64;
+    if g >= 1024.0 {
+        format!("{:.1}T", g / 1024.0)
+    } else if g >= 10.0 {
+        format!("{}G", g.round() as u64)
+    } else if g >= 1.0 {
+        format!("{g:.1}G")
+    } else {
+        format!("{}M", (b as f64 / (1u64 << 20) as f64).round() as u64)
+    }
 }
 
 fn load_samples(path: &PathBuf) -> Vec<Sample> {
@@ -263,18 +335,33 @@ fn main() {
 
     out.push_str(&Local::now().format("%H:%M").to_string());
 
+    let state = state_dir();
+    let cwd = str_at(&v, &["cwd"]).filter(|s| !s.is_empty());
+
+    if let Some(p) = state.as_deref().and_then(cpu_pct) {
+        out.push_str(&format!("{}cpu: {p}%", sep(&out)));
+    }
+    if let Some(p) = std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .as_deref()
+        .and_then(meminfo_pct)
+    {
+        out.push_str(&format!("{}ram: {p}%", sep(&out)));
+    }
+    if let Some(free) = disk_free(cwd.unwrap_or("/")) {
+        out.push_str(&format!("{}disk: {}", sep(&out), fmt_bytes(free)));
+    }
+
     if let Some(email) = account_email() {
-        out.push_str(&format!("{}{email}", sep(&out)));
+        let user = email.split('@').next().unwrap_or(&email);
+        out.push_str(&format!("{}{user}", sep(&out)));
     }
 
-    let model = str_at(&v, &["model", "display_name"]).unwrap_or("");
-    out.push_str(&format!("{}{model}", sep(&out)));
-    if let Some(e) = str_at(&v, &["effort", "level"]) {
-        out.push_str(&format!(" {e}"));
-    }
-
-    if let Some(p) = pct(&v, &["context_window", "used_percentage"]) {
-        out.push_str(&format!("{}ctx: {p}%", sep(&out)));
+    if let Some(model) = str_at(&v, &["model", "display_name"]).filter(|s| !s.is_empty()) {
+        out.push_str(&format!("{}{model}", sep(&out)));
+        if let Some(e) = str_at(&v, &["effort", "level"]) {
+            out.push_str(&format!(" {e}"));
+        }
     }
 
     // projected depletion: sample usage over time, extrapolate burn rate to 100%
@@ -284,7 +371,7 @@ fn main() {
     let seven = fval(&v, &["rate_limits", "seven_day", "used_percentage"])
         .zip(ival(&v, &["rate_limits", "seven_day", "resets_at"]));
     let mut e5 = None;
-    if let (Some((fp, fr)), Some(dir)) = (five, state_dir()) {
+    if let (Some((fp, fr)), Some(dir)) = (five, state.as_ref()) {
         let spath = dir.join("samples.tsv");
         let rpath = dir.join("rates.tsv");
         let mut samples = load_samples(&spath);
@@ -327,13 +414,9 @@ fn main() {
         push_times(&mut seg, e5, r, now, "%H:%M");
         out.push_str(&format!("{}\x1b[1m{seg}\x1b[0m", sep(&out)));
     }
-    if let Some((p, r)) = seven {
-        out.push_str(&format!("{}7d: {}%", sep(&out), p.round() as i64));
-        push_times(&mut out, None, r, now, "%a %H:%M");
-    }
 
     // path (dynamic length) last, so the fixed-width fields stay column-aligned
-    if let Some(cwd) = str_at(&v, &["cwd"]).filter(|s| !s.is_empty()) {
+    if let Some(cwd) = cwd {
         out.push_str(&format!("{}{cwd}", sep(&out)));
     }
 
@@ -549,6 +632,33 @@ mod tests {
         push_times(&mut out, None, NOW, NOW, "%H:%M");
         assert!(!out.contains('~') && !out.contains('+'), "got {out:?}");
         assert!(out.starts_with(" (") && out.ends_with(')'), "got {out:?}");
+    }
+
+    #[test]
+    fn parse_cpu_totals_sums_and_idles() {
+        // user nice system idle iowait irq softirq steal
+        let stat = "cpu  100 0 50 800 40 5 5 0\ncpu0 50 0 25 400 20 2 3 0\n";
+        assert_eq!(parse_cpu_totals(stat), Some((1000, 840)));
+        // pre-2.6 kernels: only 4 fields, no iowait
+        assert_eq!(parse_cpu_totals("cpu 10 0 10 80\n"), Some((100, 80)));
+        assert_eq!(parse_cpu_totals("cpu0 1 2 3 4\n"), None);
+        assert_eq!(parse_cpu_totals("cpu 1 2 3\n"), None);
+    }
+
+    #[test]
+    fn meminfo_pct_uses_available() {
+        let m = "MemTotal:       16000000 kB\nMemFree:         1000000 kB\nMemAvailable:    4000000 kB\n";
+        assert_eq!(meminfo_pct(m), Some(75));
+        assert_eq!(meminfo_pct("MemTotal: 16000000 kB\n"), None);
+        assert_eq!(meminfo_pct(""), None);
+    }
+
+    #[test]
+    fn fmt_bytes_units() {
+        assert_eq!(fmt_bytes(500 << 20), "500M");
+        assert_eq!(fmt_bytes(5 << 30), "5.0G");
+        assert_eq!(fmt_bytes(897 << 30), "897G");
+        assert_eq!(fmt_bytes(1536 << 30), "1.5T");
     }
 
     #[test]

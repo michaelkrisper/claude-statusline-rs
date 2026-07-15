@@ -7,12 +7,27 @@
 [![Made with Rust](https://img.shields.io/badge/rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
 
 A fast, single-binary status line for [Claude Code](https://claude.com/claude-code) that
-shows your context usage, rate-limit consumption, the active account — and **predicts
-when your tokens will run out**, based on your live burn rate and your usage history.
+doubles as a tiny system monitor: clock, CPU, RAM, free disk space, the active account,
+rate-limit consumption — and **predicts when your tokens will run out**, based on your
+live burn rate and your usage history.
 
 ```
-~/projects/foo | Fable 5 high | ctx: 42% | 5h: 66% (~20:29 / 23:52) | 7d: 50% (Thu 19:52) | you@example.com
+09:48 | cpu: 4% | ram: 21% | disk: 21G | you | Fable 5 high | 5h: 66% (~20:29 / 23:52) | ~/projects/foo
 ```
+
+| Field | Source |
+|---|---|
+| `09:48` | current local time |
+| `cpu: 4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
+| `ram: 21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
+| `disk: 21G` | free space on the filesystem holding the project directory (`statvfs`) |
+| `you` | active Claude account — the part before the `@` of the signed-in email |
+| `Fable 5 high` | model and effort level |
+| `5h: 66% (…)` | 5 h rate-limit usage with depletion forecast (see below) |
+| `~/projects/foo` | project directory |
+
+The host metrics (`cpu`, `ram`) come from `/proc` and are shown on Linux; `disk` on any
+Unix. Fields whose source is unavailable are simply omitted.
 
 Reading the `5h` segment:
 
@@ -22,9 +37,9 @@ Reading the `5h` segment:
 | `5h: 22% (+8h / 23:52)` | you have headroom: depletion would land ~8 h *past* the reset |
 | `5h: 22% (23:52)` | no rate estimate yet (fresh install, no history) |
 
-The trailing segment is the **active Claude account**, read live from `~/.claude.json`
-on every invocation so it reflects the current login immediately after an account
-switch. It is omitted when that file is absent or holds no signed-in account.
+The account segment is read live from `~/.claude.json` on every invocation so it
+reflects the current login immediately after an account switch. It is omitted when
+that file is absent or holds no signed-in account.
 
 ## How the prediction works
 
@@ -120,6 +135,7 @@ sharper after your first completed 5 h window.
 |---|---|
 | `~/.cache/statusline-rs/samples.tsv` | rolling usage samples (12 h) |
 | `~/.cache/statusline-rs/rates.tsv` | per-window burn rates of the last 20 closed 5 h windows |
+| `~/.cache/statusline-rs/cpu.tsv` | `/proc/stat` jiffies baseline for the CPU-usage delta |
 
 (`$XDG_CACHE_HOME` is honored; on Windows the files live under
 `%USERPROFILE%\.cache\statusline-rs`.) Delete both to reset all learned history.
