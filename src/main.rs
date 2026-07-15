@@ -340,14 +340,14 @@ fn main() {
     let cwd = str_at(&v, &["cwd"]).filter(|s| !s.is_empty());
 
     if let Some(p) = state.as_deref().and_then(cpu_pct) {
-        out.push_str(&format!("{}⚙ {p}%", sep(&out)));
+        out.push_str(&format!("{}🧠 {p}%", sep(&out)));
     }
     if let Some(p) = std::fs::read_to_string("/proc/meminfo")
         .ok()
         .as_deref()
         .and_then(meminfo_pct)
     {
-        out.push_str(&format!("{}🧠 {p}%", sep(&out)));
+        out.push_str(&format!("{}📟 {p}%", sep(&out)));
     }
     if let Some(free) = disk_free(cwd.unwrap_or("/")) {
         out.push_str(&format!("{}💾 {}", sep(&out), fmt_bytes(free)));
