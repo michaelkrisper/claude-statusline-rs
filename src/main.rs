@@ -538,10 +538,16 @@ fn main() {
         out.push_str(&format!("{}\x1b[1m{seg}\x1b[0m", sep(&out)));
     }
 
-    // clock last, pushed to the right edge when the terminal width is known
+    // clock last, pushed to the right edge when the terminal width is known.
+    // Claude Code renders the line a few columns narrower than the tty reports,
+    // so a right margin (default 3, tunable via STATUSLINE_MARGIN) is kept free.
+    let margin: usize = std::env::var("STATUSLINE_MARGIN")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3);
     let clock = Local::now().format("🕐 %H:%M").to_string();
     let pad = term_width()
-        .map(|w| w.saturating_sub(disp_width(&out) + disp_width(&clock)))
+        .map(|w| w.saturating_sub(disp_width(&out) + disp_width(&clock) + margin))
         .filter(|&p| p > 0)
         .unwrap_or(1);
     out.push_str(&format!("{}{clock}", " ".repeat(pad)));

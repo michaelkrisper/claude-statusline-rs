@@ -17,7 +17,9 @@ live burn rate and your usage history.
 
 Fields are separated by single spaces; the symbols carry the visual separation. The
 clock is pushed to the right edge of the terminal (`TIOCGWINSZ` on `/dev/tty`, with
-`$COLUMNS` as fallback; a single space when neither is available).
+`$COLUMNS` as fallback; a single space when neither is available). Claude Code renders
+the line a few columns narrower than the tty reports, so 3 columns are kept free on
+the right — tune with `STATUSLINE_MARGIN` if your setup clips or under-shoots.
 
 | Field | Source |
 |---|---|
