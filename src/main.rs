@@ -334,28 +334,28 @@ fn main() {
 
     let mut out = String::new();
 
-    out.push_str(&Local::now().format("%H:%M").to_string());
+    out.push_str(&Local::now().format("🕐 %H:%M").to_string());
 
     let state = state_dir();
     let cwd = str_at(&v, &["cwd"]).filter(|s| !s.is_empty());
 
     if let Some(p) = state.as_deref().and_then(cpu_pct) {
-        out.push_str(&format!("{}⚙{p}%", sep(&out)));
+        out.push_str(&format!("{}⚙ {p}%", sep(&out)));
     }
     if let Some(p) = std::fs::read_to_string("/proc/meminfo")
         .ok()
         .as_deref()
         .and_then(meminfo_pct)
     {
-        out.push_str(&format!("{}🧠{p}%", sep(&out)));
+        out.push_str(&format!("{}🧠 {p}%", sep(&out)));
     }
     if let Some(free) = disk_free(cwd.unwrap_or("/")) {
-        out.push_str(&format!("{}💾{}", sep(&out), fmt_bytes(free)));
+        out.push_str(&format!("{}💾 {}", sep(&out), fmt_bytes(free)));
     }
 
     if let Some(email) = account_email() {
         let user = email.split('@').next().unwrap_or(&email);
-        out.push_str(&format!("{}👤{user}", sep(&out)));
+        out.push_str(&format!("{}👤 {user}", sep(&out)));
     }
 
     if let Some(model) = str_at(&v, &["model", "display_name"]).filter(|s| !s.is_empty()) {
@@ -411,14 +411,14 @@ fn main() {
     if let Some((p, r)) = five {
         // the 5h window (usage + depletion forecast) is the headline metric, so
         // emphasize it in bold (\x1b[1m); the rest of the line stays default weight
-        let mut seg = format!("5h: {}%", p.round() as i64);
+        let mut seg = format!("⏳ {}%", p.round() as i64);
         push_times(&mut seg, e5, r, now, "%H:%M");
         out.push_str(&format!("{}\x1b[1m{seg}\x1b[0m", sep(&out)));
     }
 
     // path (dynamic length) last, so the fixed-width fields stay column-aligned
     if let Some(cwd) = cwd {
-        out.push_str(&format!("{}📁{cwd}", sep(&out)));
+        out.push_str(&format!("{}📁 {cwd}", sep(&out)));
     }
 
     println!("{out}");

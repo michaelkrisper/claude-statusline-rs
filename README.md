@@ -12,32 +12,32 @@ rate-limit consumption — and **predicts when your tokens will run out**, based
 live burn rate and your usage history.
 
 ```
-09:48 ⚙4% 🧠21% 💾21G 👤you Fable 5 high 5h: 66% (~20:29 / 23:52) 📁~/projects/foo
+🕐 09:48 ⚙ 4% 🧠 21% 💾 21G 👤 you Fable 5 high ⏳ 66% (~20:29 / 23:52) 📁 ~/projects/foo
 ```
 
 Fields are separated by single spaces; the symbols carry the visual separation.
 
 | Field | Source |
 |---|---|
-| `09:48` | current local time |
-| `⚙4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
-| `🧠21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
-| `💾21G` | free space on the filesystem holding the project directory (`statvfs`) |
-| `👤you` | active Claude account — the part before the `@` of the signed-in email |
+| `🕐 09:48` | current local time |
+| `⚙ 4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
+| `🧠 21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
+| `💾 21G` | free space on the filesystem holding the project directory (`statvfs`) |
+| `👤 you` | active Claude account — the part before the `@` of the signed-in email |
 | `Fable 5 high` | model and effort level |
-| `5h: 66% (…)` | 5 h rate-limit usage with depletion forecast (see below) |
-| `📁~/projects/foo` | project directory |
+| `⏳ 66% (…)` | 5 h rate-limit usage with depletion forecast (see below) |
+| `📁 ~/projects/foo` | project directory |
 
 The host metrics (`cpu`, `ram`) come from `/proc` and are shown on Linux; `disk` on any
 Unix. Fields whose source is unavailable are simply omitted.
 
-Reading the `5h` segment:
+Reading the `⏳` (5 h session) segment:
 
 | Display | Meaning |
 |---|---|
-| `5h: 66% (~20:29 / 23:52)` | at the current burn rate you hit 100% at ~20:29, window resets 23:52 |
-| `5h: 22% (+8h / 23:52)` | you have headroom: depletion would land ~8 h *past* the reset |
-| `5h: 22% (23:52)` | no rate estimate yet (fresh install, no history) |
+| `⏳ 66% (~20:29 / 23:52)` | at the current burn rate you hit 100% at ~20:29, window resets 23:52 |
+| `⏳ 22% (+8h / 23:52)` | you have headroom: depletion would land ~8 h *past* the reset |
+| `⏳ 22% (23:52)` | no rate estimate yet (fresh install, no history) |
 
 The account segment is read live from `~/.claude.json` on every invocation so it
 reflects the current login immediately after an account switch. It is omitted when
