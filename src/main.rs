@@ -321,9 +321,10 @@ fn eta(
     Some(now + (((100.0 - cur) / rate).min(1e9) as i64))
 }
 
-// separator prefix: empty for the first field, " | " once the line has content
+// separator prefix: empty for the first field, a space once the line has content;
+// the per-field symbols carry the visual separation
 fn sep(out: &str) -> &'static str {
-    if out.is_empty() { "" } else { " | " }
+    if out.is_empty() { "" } else { " " }
 }
 
 fn main() {
@@ -339,22 +340,22 @@ fn main() {
     let cwd = str_at(&v, &["cwd"]).filter(|s| !s.is_empty());
 
     if let Some(p) = state.as_deref().and_then(cpu_pct) {
-        out.push_str(&format!("{}cpu: {p}%", sep(&out)));
+        out.push_str(&format!("{}⚙{p}%", sep(&out)));
     }
     if let Some(p) = std::fs::read_to_string("/proc/meminfo")
         .ok()
         .as_deref()
         .and_then(meminfo_pct)
     {
-        out.push_str(&format!("{}ram: {p}%", sep(&out)));
+        out.push_str(&format!("{}🧠{p}%", sep(&out)));
     }
     if let Some(free) = disk_free(cwd.unwrap_or("/")) {
-        out.push_str(&format!("{}disk: {}", sep(&out), fmt_bytes(free)));
+        out.push_str(&format!("{}💾{}", sep(&out), fmt_bytes(free)));
     }
 
     if let Some(email) = account_email() {
         let user = email.split('@').next().unwrap_or(&email);
-        out.push_str(&format!("{}{user}", sep(&out)));
+        out.push_str(&format!("{}👤{user}", sep(&out)));
     }
 
     if let Some(model) = str_at(&v, &["model", "display_name"]).filter(|s| !s.is_empty()) {
@@ -417,7 +418,7 @@ fn main() {
 
     // path (dynamic length) last, so the fixed-width fields stay column-aligned
     if let Some(cwd) = cwd {
-        out.push_str(&format!("{}{cwd}", sep(&out)));
+        out.push_str(&format!("{}📁{cwd}", sep(&out)));
     }
 
     println!("{out}");

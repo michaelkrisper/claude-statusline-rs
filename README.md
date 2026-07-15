@@ -12,19 +12,21 @@ rate-limit consumption — and **predicts when your tokens will run out**, based
 live burn rate and your usage history.
 
 ```
-09:48 | cpu: 4% | ram: 21% | disk: 21G | you | Fable 5 high | 5h: 66% (~20:29 / 23:52) | ~/projects/foo
+09:48 ⚙4% 🧠21% 💾21G 👤you Fable 5 high 5h: 66% (~20:29 / 23:52) 📁~/projects/foo
 ```
+
+Fields are separated by single spaces; the symbols carry the visual separation.
 
 | Field | Source |
 |---|---|
 | `09:48` | current local time |
-| `cpu: 4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
-| `ram: 21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
-| `disk: 21G` | free space on the filesystem holding the project directory (`statvfs`) |
-| `you` | active Claude account — the part before the `@` of the signed-in email |
+| `⚙4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
+| `🧠21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
+| `💾21G` | free space on the filesystem holding the project directory (`statvfs`) |
+| `👤you` | active Claude account — the part before the `@` of the signed-in email |
 | `Fable 5 high` | model and effort level |
 | `5h: 66% (…)` | 5 h rate-limit usage with depletion forecast (see below) |
-| `~/projects/foo` | project directory |
+| `📁~/projects/foo` | project directory |
 
 The host metrics (`cpu`, `ram`) come from `/proc` and are shown on Linux; `disk` on any
 Unix. Fields whose source is unavailable are simply omitted.
