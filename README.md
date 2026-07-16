@@ -12,7 +12,7 @@ rate-limit consumption — and **predicts when your tokens will run out**, based
 live burn rate and your usage history.
 
 ```
-📁 ~/projects/foo 🧠 4% 📟 21% 🎮 7% 🖼 13% 💾 21G 👤 you Fable 5 high ⏳ 66% (~20:29 / 23:52)      🕐 09:48
+📁 ~/projects/foo 🧠 4% 📟 21% 🎮 7% 🖼 13% 💾 21G 👤 you Fable 5 high 📊 38% ⏳ 66% (~20:29 / 23:52)      🕐 09:48
 ```
 
 Fields are separated by single spaces; the symbols carry the visual separation. The
@@ -31,6 +31,7 @@ the right — tune with `STATUSLINE_MARGIN` if your setup clips or under-shoots.
 | `💾 21G` | free space on the filesystem holding the project directory (`statvfs`) |
 | `👤 you` | active Claude account — the part before the `@` of the signed-in email |
 | `Fable 5 high` | model and effort level |
+| `📊 38%` | context window usage of the current session |
 | `⏳ 66% (…)` | 5 h rate-limit usage with depletion forecast (see below) |
 | `🕐 09:48` | current local time, right-aligned |
 

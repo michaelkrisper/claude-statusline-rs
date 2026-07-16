@@ -488,6 +488,10 @@ fn main() {
         }
     }
 
+    if let Some(p) = fval(&v, &["context_window", "used_percentage"]) {
+        out.push_str(&format!("{}📊 {}%", sep(&out), p.round() as i64));
+    }
+
     // projected depletion: sample usage over time, extrapolate burn rate to 100%
     let five = fval(&v, &["rate_limits", "five_hour", "used_percentage"])
         .zip(ival(&v, &["rate_limits", "five_hour", "resets_at"]));
