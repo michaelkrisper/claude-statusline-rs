@@ -7,33 +7,31 @@
 [![Made with Rust](https://img.shields.io/badge/rust-stable-orange?logo=rust)](https://www.rust-lang.org/)
 
 A fast, single-binary status line for [Claude Code](https://claude.com/claude-code) that
-doubles as a tiny system monitor: clock, CPU, RAM, free disk space, the active account,
-rate-limit consumption — and **predicts when your tokens will run out**, based on your
-live burn rate and your usage history.
+doubles as a tiny system monitor: clock, CPU, RAM, GPU/VRAM, free disk space, the active
+account, rate-limit consumption — and **predicts when your tokens will run out**, based on
+your live burn rate and your usage history.
 
 ```
-📁 ~/projects/foo 🧠 4% 📟 21% 🎮 7% 🖼 13% 💾 21G 👤 you Fable 5 high 📊 38% ⏳ 66% (~20:29 / 23:52)      🕐 09:48
+~/projects/foo | CPU 4% RAM 21% | GPU 7% VRAM 13% | DISK 21G | you | Fable 5 high | CTX 38% | SESSION 66% (~20:29 / 23:52) | 09:48
 ```
 
-Fields are separated by single spaces; the symbols carry the visual separation. The
-clock is pushed to the right edge of the terminal (`TIOCGWINSZ` on `/dev/tty`, with
-`$COLUMNS` as fallback; a single space when neither is available). Claude Code renders
-the line a few columns narrower than the tty reports, so 3 columns are kept free on
-the right — tune with `STATUSLINE_MARGIN` if your setup clips or under-shoots.
+Fields are separated by ` | `. Related host metrics share a block, space-separated
+within it: CPU with RAM, GPU with VRAM. Fields whose source is unavailable are simply
+omitted; the clock is appended as the final segment.
 
 | Field | Source |
 |---|---|
-| `📁 ~/projects/foo` | project directory |
-| `🧠 4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
-| `📟 21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
-| `🎮 7%` | GPU utilization (first GPU, via `nvidia-smi`, cached — see below) |
-| `🖼 13%` | used VRAM (memory.used vs memory.total) |
-| `💾 21G` | free space on the filesystem holding the project directory (`statvfs`) |
-| `👤 you` | active Claude account — the part before the `@` of the signed-in email |
+| `~/projects/foo` | project directory |
+| `CPU 4%` | CPU usage since the previous refresh (`/proc/stat` delta; appears from the second invocation on) |
+| `RAM 21%` | used RAM, `MemAvailable` vs `MemTotal` from `/proc/meminfo` |
+| `GPU 7%` | GPU utilization (first GPU, via `nvidia-smi`, cached — see below) |
+| `VRAM 13%` | used VRAM (memory.used vs memory.total) |
+| `DISK 21G` | free space on the filesystem holding the project directory (`statvfs`) |
+| `you` | active Claude account — the part before the `@` of the signed-in email |
 | `Fable 5 high` | model and effort level |
-| `📊 38%` | context window usage of the current session |
-| `⏳ 66% (…)` | 5 h rate-limit usage with depletion forecast (see below) |
-| `🕐 09:48` | current local time, right-aligned |
+| `CTX 38%` | context window usage of the current session |
+| `SESSION 66% (…)` | 5 h rate-limit usage with depletion forecast (see below) |
+| `09:48` | current local time |
 
 The host metrics (`cpu`, `ram`) come from `/proc` and are shown on Linux; `disk` on any
 Unix. Fields whose source is unavailable are simply omitted.
@@ -44,13 +42,13 @@ never queried inline: at most every 10 s a **detached** background child refresh
 status-line refresh ever blocks on the GPU. Without `nvidia-smi` the fields stay
 hidden.
 
-Reading the `⏳` (5 h session) segment:
+Reading the `SESSION` (5 h) segment:
 
 | Display | Meaning |
 |---|---|
-| `⏳ 66% (~20:29 / 23:52)` | at the current burn rate you hit 100% at ~20:29, window resets 23:52 |
-| `⏳ 22% (+8h / 23:52)` | you have headroom: depletion would land ~8 h *past* the reset |
-| `⏳ 22% (23:52)` | no rate estimate yet (fresh install, no history) |
+| `SESSION 66% (~20:29 / 23:52)` | at the current burn rate you hit 100% at ~20:29, window resets 23:52 |
+| `SESSION 22% (+8h / 23:52)` | you have headroom: depletion would land ~8 h *past* the reset |
+| `SESSION 22% (23:52)` | no rate estimate yet (fresh install, no history) |
 
 The account segment is read live from `~/.claude.json` on every invocation so it
 reflects the current login immediately after an account switch. It is omitted when
