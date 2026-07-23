@@ -456,29 +456,29 @@ fn main() {
     let cwd = str_at(&v, &["cwd"]).filter(|s| !s.is_empty());
 
     if let Some(cwd) = cwd {
-        out.push_str(&format!("📁 {cwd}"));
+        out.push_str(cwd);
     }
 
     if let Some(p) = state.as_deref().and_then(cpu_pct) {
-        out.push_str(&format!("{}🧠 {p}%", sep(&out)));
+        out.push_str(&format!("{}CPU {p}%", sep(&out)));
     }
     if let Some(p) = std::fs::read_to_string("/proc/meminfo")
         .ok()
         .as_deref()
         .and_then(meminfo_pct)
     {
-        out.push_str(&format!("{}📟 {p}%", sep(&out)));
+        out.push_str(&format!("{}RAM {p}%", sep(&out)));
     }
     if let Some((gpu, vram)) = state.as_deref().and_then(|d| gpu_stats(d, now)) {
-        out.push_str(&format!("{}🎮 {gpu}% 🖼 {vram}%", sep(&out)));
+        out.push_str(&format!("{}GPU {gpu}% VRAM {vram}%", sep(&out)));
     }
     if let Some(free) = disk_free(cwd.unwrap_or("/")) {
-        out.push_str(&format!("{}💾 {}", sep(&out), fmt_bytes(free)));
+        out.push_str(&format!("{}DISK {}", sep(&out), fmt_bytes(free)));
     }
 
     if let Some(email) = account_email() {
         let user = email.split('@').next().unwrap_or(&email);
-        out.push_str(&format!("{}👤 {user}", sep(&out)));
+        out.push_str(&format!("{}USER {user}", sep(&out)));
     }
 
     if let Some(model) = str_at(&v, &["model", "display_name"]).filter(|s| !s.is_empty()) {
@@ -489,7 +489,7 @@ fn main() {
     }
 
     if let Some(p) = fval(&v, &["context_window", "used_percentage"]) {
-        out.push_str(&format!("{}📊 {}%", sep(&out), p.round() as i64));
+        out.push_str(&format!("{}CTX {}%", sep(&out), p.round() as i64));
     }
 
     // projected depletion: sample usage over time, extrapolate burn rate to 100%
@@ -537,7 +537,7 @@ fn main() {
     if let Some((p, r)) = five {
         // the 5h window (usage + depletion forecast) is the headline metric, so
         // emphasize it in bold (\x1b[1m); the rest of the line stays default weight
-        let mut seg = format!("⏳ {}%", p.round() as i64);
+        let mut seg = format!("SESSION {}%", p.round() as i64);
         push_times(&mut seg, e5, r, now, "%H:%M");
         out.push_str(&format!("{}\x1b[1m{seg}\x1b[0m", sep(&out)));
     }
@@ -549,7 +549,7 @@ fn main() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(3);
-    let clock = Local::now().format("🕐 %H:%M").to_string();
+    let clock = Local::now().format("%H:%M").to_string();
     let pad = term_width()
         .map(|w| w.saturating_sub(disp_width(&out) + disp_width(&clock) + margin))
         .filter(|&p| p > 0)
