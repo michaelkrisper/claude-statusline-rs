@@ -441,7 +441,7 @@ fn eta(
 // separator prefix: empty for the first field, a space once the line has content;
 // the per-field symbols carry the visual separation
 fn sep(out: &str) -> &'static str {
-    if out.is_empty() { "" } else { " " }
+    if out.is_empty() { "" } else { " | " }
 }
 
 fn main() {
